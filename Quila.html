@@ -1,0 +1,708 @@
+<html><head><base href="."><style>
+body {
+    background-color: #000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    font-family: 'Press Start 2P', monospace;
+}
+
+.digital-rain {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+}
+
+.game-container {
+    position: relative;
+    z-index: 1;
+}
+
+#game-board {
+    border: 2px solid #fff;
+    background-color: #000;
+    width: 400px;  
+    height: 800px; 
+}
+
+.score-board {
+    position: absolute;
+    top: 0;
+    right: -200px; 
+    color: #fff;
+    padding: 20px;
+}
+
+.next-piece, .held-piece {
+    margin-top: 20px;
+    border: 2px solid #fff;
+    width: 100px;
+    height: 100px;
+}
+
+.held-piece {
+    margin-bottom: 20px;
+}
+
+.label {
+    font-size: 12px;
+    margin-bottom: 5px;
+}
+
+.combo-announcement {
+    position: absolute;
+    color: #fff;
+    font-size: 24px;
+    text-align: center;
+    width: 100%;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+}
+
+.webcam-container {
+    position: absolute;
+    bottom: 20px;
+    right: -180px;
+    width: 160px;    
+    height: 160px;   
+    border-radius: 50%;
+    overflow: hidden;
+    border: 2px solid #fff;
+}
+
+#webcam {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.control-buttons {
+    position: absolute;
+    bottom: -40px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.pause-button {
+    background: #32CD32;
+    color: white;
+    border: 2px solid #fff;
+    padding: 10px 20px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.pause-button:hover {
+    background: #228B22;
+}
+
+.paused-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    color: #fff;
+    font-size: 24px;
+    z-index: 10;
+}
+
+@keyframes comboFade {
+    0% { opacity: 0; transform: translateY(20px); }
+    20% { opacity: 1; transform: translateY(0); }
+    80% { opacity: 1; transform: translateY(0); }
+}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+</head>
+<body>
+    <h1>Quila Sahara</h1> <!-- Added H1 element -->
+    <canvas class="digital-rain" id="digital-rain"></canvas>
+    <div class="game-container">
+        <canvas id="game-board" width="400" height="800"></canvas>
+        <div class="score-board">
+            <div class="label">HELD PIECE</div>
+            <div class="held-piece">
+                <canvas id="held-piece-preview" width="100" height="100"></canvas>
+            </div>
+            <div>SCORE: <span id="score">0</span></div>
+            <div>LEVEL: <span id="level">1</span></div>
+            <div>LINES: <span id="lines">0</span></div>
+            <div class="label">NEXT PIECE</div>
+            <div class="next-piece">
+                <canvas id="next-piece-preview" width="100" height="100"></canvas>
+            </div>
+            <div class="webcam-container">
+                <video id="webcam" autoplay playsinline></video>
+            </div>
+        </div>
+        <div class="combo-announcement" id="combo-announcement"></div>
+        <div class="paused-overlay" id="paused-overlay">PAUSED</div>
+        <div class="control-buttons">
+            <button class="pause-button" id="pause-button">PAUSE</button>
+        </div>
+    </div>
+
+    <script>
+    // Digital Rain Animation
+    const rainCanvas = document.getElementById('digital-rain');
+    const rainCtx = rainCanvas.getContext('2d');
+
+    // Set canvas size to window size
+    function resizeRain() {
+        rainCanvas.width = window.innerWidth;
+        rainCanvas.height = window.innerHeight;
+    }
+    resizeRain();
+    window.addEventListener('resize', resizeRain);
+
+    // Christmas themed characters
+    const chars = "❄️🎄🎅🎁⛄★*:・゜"; // Christmas themed characters
+    const charArray = chars.split('');
+    const fontSize = 20; // Larger size for better visibility
+    const columns = Math.floor(rainCanvas.width / fontSize);
+    const drops = [];
+
+    // Reset drops array with new column count
+    drops.length = 0;
+    for (let i = 0; i < columns; i++) {
+        drops[i] = Math.random() * -100; // Random starting positions above viewport
+    }
+
+    // Draw the digital rain
+    function drawRain() {
+        rainCtx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+        rainCtx.fillRect(0, 0, rainCanvas.width, rainCanvas.height);
+
+        const festiveColors = ['#FF0000', '#00FF00', '#FFD700', '#FFFFFF'];
+
+        for (let i = 0; i < drops.length; i++) {
+            rainCtx.fillStyle = festiveColors[Math.floor(Math.random() * festiveColors.length)];
+            rainCtx.font = fontSize + 'px monospace';
+
+            const char = charArray[Math.floor(Math.random() * charArray.length)];
+            rainCtx.fillText(char, i * fontSize, drops[i] * fontSize);
+
+            if (drops[i] * fontSize > rainCanvas.height && Math.random() > 0.95) {
+                drops[i] = 0;
+            }
+            drops[i] += 0.5; // Slower falling speed for snowflake effect
+        }
+    }
+
+    // Animate the rain
+    function animateRain() {
+        drawRain();
+        requestAnimationFrame(animateRain);
+    }
+
+    animateRain();
+    </script>
+    <script>
+    const canvas = document.getElementById('game-board');
+    const ctx = canvas.getContext('2d');
+    const nextPieceCanvas = document.getElementById('next-piece-preview');
+    const nextPieceCtx = nextPieceCanvas.getContext('2d');
+    const heldPieceCanvas = document.getElementById('held-piece-preview');
+    const heldPieceCtx = heldPieceCanvas.getContext('2d');
+
+    const BLOCK_SIZE = 40; 
+    const BOARD_WIDTH = 10; 
+    const BOARD_HEIGHT = 20; 
+
+    const COLORS = [
+        null,
+        '#2E8B57', 
+        '#228B22', 
+        '#006400', 
+        '#90EE90', 
+        '#32CD32', 
+        '#3CB371', 
+        '#4F7942', 
+    ];
+
+    const PIECES = [
+        [[1, 1, 1, 1]], 
+        [[2, 0, 0], [2, 2, 2]], 
+        [[0, 0, 3], [3, 3, 3]], 
+        [[4, 4], [4, 4]], 
+        [[0, 5, 5], [5, 5, 0]], 
+        [[0, 6, 0], [6, 6, 6]], 
+        [[7, 7, 0], [0, 7, 7]], 
+    ];
+
+    let board = createBoard();
+    let score = 0;
+    let level = 1;
+    let lines = 0;
+    let gameOver = false;
+
+    let dropCounter = 0;
+    let dropInterval = 1000;
+    let lastTime = 0;
+
+    const player = {
+        pos: {x: 0, y: 0},
+        matrix: null,
+        score: 0,
+    };
+
+    let nextPiece = createPiece(Math.floor(Math.random() * PIECES.length));
+    let heldPiece = null;
+    let canHold = true;
+
+    let isPaused = false;
+
+    function createBoard() {
+        return Array(BOARD_HEIGHT).fill().map(() => Array(BOARD_WIDTH).fill(0));
+    }
+
+    function createPiece(type) {
+        return PIECES[type];
+    }
+
+    function getShadowPosition() {
+        const shadowPos = {
+            x: player.pos.x,
+            y: player.pos.y
+        };
+        
+        while (!collide(board, {matrix: player.matrix, pos: shadowPos})) {
+            shadowPos.y++;
+        }
+        shadowPos.y--;
+        
+        return shadowPos;
+    }
+
+    function draw() {
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        const shadowPos = getShadowPosition();
+        drawMatrix(player.matrix, shadowPos, true);
+        
+        drawMatrix(board, {x: 0, y: 0});
+        drawMatrix(player.matrix, player.pos);
+        drawNextPiece();
+        drawHeldPiece();
+    }
+
+    function drawMatrix(matrix, offset, isShadow = false) {
+        matrix.forEach((row, y) => {
+            row.forEach((value, x) => {
+                if (value !== 0) {
+                    const xPos = (x + offset.x) * BLOCK_SIZE;
+                    const yPos = (y + offset.y) * BLOCK_SIZE;
+
+                    if (isShadow) {
+                        ctx.fillStyle = '#333';
+                        ctx.globalAlpha = 0.5;
+                        ctx.fillRect(xPos, yPos, BLOCK_SIZE, BLOCK_SIZE);
+                    } else {
+                        ctx.fillStyle = COLORS[value];
+                        ctx.fillRect(xPos, yPos, BLOCK_SIZE, BLOCK_SIZE);
+                        
+                        ctx.beginPath();
+                        ctx.strokeStyle = '#FFFFFF';
+                        ctx.lineWidth = 2;
+                        
+                        ctx.moveTo(xPos + BLOCK_SIZE / 2, yPos);
+                        ctx.lineTo(xPos + BLOCK_SIZE / 2, yPos + BLOCK_SIZE);
+                        ctx.moveTo(xPos + BLOCK_SIZE / 4, yPos + BLOCK_SIZE / 3);
+                        ctx.lineTo(xPos + 3 * BLOCK_SIZE / 4, yPos + BLOCK_SIZE / 3);
+                        ctx.moveTo(xPos + BLOCK_SIZE / 4, yPos + 2 * BLOCK_SIZE / 3);
+                        ctx.lineTo(xPos + 3 * BLOCK_SIZE / 4, yPos + 2 * BLOCK_SIZE / 3);
+                        
+                        ctx.stroke();
+                        
+                        ctx.fillStyle = '#FFD700';
+                        ctx.beginPath();
+                        ctx.arc(xPos + BLOCK_SIZE / 2, yPos + BLOCK_SIZE / 2, 2, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    
+                    ctx.strokeStyle = isShadow ? '#333' : '#fff';
+                    ctx.strokeRect(xPos, yPos, BLOCK_SIZE, BLOCK_SIZE);
+                }
+            });
+        });
+        ctx.globalAlpha = 1;
+    }
+
+    function merge(board, player) {
+        player.matrix.forEach((row, y) => {
+            row.forEach((value, x) => {
+                if (value !== 0) {
+                    board[y + player.pos.y][x + player.pos.x] = value;
+                }
+            });
+        });
+    }
+
+    function collide(board, player) {
+        const [m, o] = [player.matrix, player.pos];
+        for (let y = 0; y < m.length; ++y) {
+            for (let x = 0; x < m[y].length; ++x) {
+                if (m[y][x] !== 0 &&
+                    (board[y + o.y] &&
+                    board[y + o.y][x + o.x]) !== 0) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    function rotate(matrix) {
+        if (!matrix || matrix.length === 0) return matrix;
+        
+        const N = matrix.length;
+        const M = matrix[0].length;
+        const rotated = Array(M).fill().map(() => Array(N).fill(0));
+        
+        for(let i = 0; i < M; i++) {
+            for(let j = 0; j < N; j++) {
+                rotated[i][j] = matrix[N - 1 - j][i];
+            }
+        }
+        return rotated;
+    }
+
+    function playerDrop() {
+        player.pos.y++;
+        if (collide(board, player)) {
+            player.pos.y--;
+            merge(board, player);
+            playerReset();
+            arenaSweep();
+            updateScore();
+        }
+        dropCounter = 0;
+    }
+
+    function playerHardDrop() {
+        while (!collide(board, player)) {
+            player.pos.y++;
+        }
+        player.pos.y--;
+        merge(board, player);
+        playerReset();
+        arenaSweep();
+        updateScore();
+        dropCounter = 0;
+    }
+
+    function playerMove(dir) {
+        player.pos.x += dir;
+        if (collide(board, player)) {
+            player.pos.x -= dir;
+        }
+    }
+
+    function playerRotate() {
+        const pos = player.pos.x;
+        let offset = 1;
+        const matrix = rotate(player.matrix);
+        player.matrix = matrix;
+        
+        while (collide(board, player)) {
+            player.pos.x += offset;
+            offset = -(offset + (offset > 0 ? 1 : -1));
+            if (offset > matrix[0].length) {
+                player.matrix = rotate(rotate(rotate(matrix)));
+                player.pos.x = pos;
+                return;
+            }
+        }
+    }
+
+    function playerReset() {
+        player.matrix = nextPiece;
+        nextPiece = createPiece(Math.floor(Math.random() * PIECES.length));
+        player.pos.y = 0;
+        player.pos.x = Math.floor(BOARD_WIDTH / 2) - Math.floor(player.matrix[0].length / 2);
+        canHold = true;
+        
+        if (collide(board, player)) {
+            gameOver = true;
+            alert('Game Over! Score: ' + score);
+            board = createBoard();
+            score = 0;
+            level = 1;
+            lines = 0;
+            heldPiece = null;
+            updateScore();
+        }
+    }
+
+    function arenaSweep() {
+        let linesCleared = 0;
+        
+        outer: for (let y = board.length - 1; y > 0; --y) {
+            for (let x = 0; x < board[y].length; ++x) {
+                if (board[y][x] === 0) {
+                    continue outer;
+                }
+            }
+            
+            const row = board.splice(y, 1)[0].fill(0);
+            board.unshift(row);
+            ++y;
+            
+            linesCleared++;
+        }
+        
+        if (linesCleared >= 2) {
+            showComboAnnouncement(linesCleared);
+        }
+        
+        if (linesCleared > 0) {
+            lines += linesCleared;
+            score += linesCleared * linesCleared * 100 * level;
+            
+            const newLevel = Math.floor(score / 500) + 1;
+            if (newLevel > level) {
+                level = newLevel;
+                showComboAnnouncement("LEVEL UP!");
+                dropInterval = Math.max(100, 1000 - (level - 1) * 100);
+            }
+        }
+    }
+
+    function showComboAnnouncement(linesCleared) {
+        const announcement = document.getElementById('combo-announcement');
+        let message = '';
+        
+        if (typeof linesCleared === 'string') {
+            message = linesCleared;
+        } else {
+            switch(linesCleared) {
+                case 2:
+                    message = 'DOUBLE!';
+                    break;
+                case 3:
+                    message = 'TRIPLE!';
+                    break;
+                case 4:
+                    message = 'TETRIS!';
+                    break;
+                default:
+                    message = `${linesCleared} LINES!`;
+            }
+        }
+        
+        announcement.textContent = message;
+        announcement.style.animation = 'none';
+        announcement.offsetHeight;
+        announcement.style.animation = 'comboFade 1.5s forwards';
+    }
+
+    function updateScore() {
+        document.getElementById('score').textContent = score;
+        document.getElementById('level').textContent = level;
+        document.getElementById('lines').textContent = lines;
+    }
+
+    function update(time = 0) {
+        if (!gameOver && !isPaused) {
+            const deltaTime = time - lastTime;
+            lastTime = time;
+            
+            dropCounter += deltaTime;
+            if (dropCounter > dropInterval) {
+                playerDrop();
+            }
+            
+            draw();
+        }
+        requestAnimationFrame(update);
+    }
+
+    function drawNextPiece() {
+        nextPieceCtx.fillStyle = '#000';
+        nextPieceCtx.fillRect(0, 0, nextPieceCanvas.width, nextPieceCanvas.height);
+        
+        const xOffset = (nextPieceCanvas.width - (nextPiece[0].length * BLOCK_SIZE)) / 2;
+        const yOffset = (nextPieceCanvas.height - (nextPiece.length * BLOCK_SIZE)) / 2;
+        
+        nextPiece.forEach((row, y) => {
+            row.forEach((value, x) => {
+                if (value !== 0) {
+                    nextPieceCtx.fillStyle = COLORS[value];
+                    nextPieceCtx.fillRect(
+                        x * BLOCK_SIZE + xOffset,
+                        y * BLOCK_SIZE + yOffset,
+                        BLOCK_SIZE,
+                        BLOCK_SIZE
+                    );
+                    nextPieceCtx.strokeStyle = '#fff';
+                    nextPieceCtx.strokeRect(
+                        x * BLOCK_SIZE + xOffset,
+                        y * BLOCK_SIZE + yOffset,
+                        BLOCK_SIZE,
+                        BLOCK_SIZE
+                    );
+                    
+                    nextPieceCtx.beginPath();
+                    nextPieceCtx.strokeStyle = '#FFFFFF';
+                    nextPieceCtx.lineWidth = 2;
+                    
+                    nextPieceCtx.moveTo(x * BLOCK_SIZE + xOffset + BLOCK_SIZE / 2, y * BLOCK_SIZE + yOffset);
+                    nextPieceCtx.lineTo(x * BLOCK_SIZE + xOffset + BLOCK_SIZE / 2, y * BLOCK_SIZE + yOffset + BLOCK_SIZE);
+                    nextPieceCtx.moveTo(x * BLOCK_SIZE + xOffset + BLOCK_SIZE / 4, y * BLOCK_SIZE + yOffset + BLOCK_SIZE / 3);
+                    nextPieceCtx.lineTo(x * BLOCK_SIZE + xOffset + 3 * BLOCK_SIZE / 4, y * BLOCK_SIZE + yOffset + BLOCK_SIZE / 3);
+                    nextPieceCtx.moveTo(x * BLOCK_SIZE + xOffset + BLOCK_SIZE / 4, y * BLOCK_SIZE + yOffset + 2 * BLOCK_SIZE / 3);
+                    nextPieceCtx.lineTo(x * BLOCK_SIZE + xOffset + 3 * BLOCK_SIZE / 4, y * BLOCK_SIZE + yOffset + 2 * BLOCK_SIZE / 3);
+                    
+                    nextPieceCtx.stroke();
+                    
+                    nextPieceCtx.fillStyle = '#FFD700';
+                    nextPieceCtx.beginPath();
+                    nextPieceCtx.arc(x * BLOCK_SIZE + xOffset + BLOCK_SIZE / 2, y * BLOCK_SIZE + yOffset + BLOCK_SIZE / 2, 2, 0, Math.PI * 2);
+                    nextPieceCtx.fill();
+                }
+            });
+        });
+    }
+
+    function drawHeldPiece() {
+        heldPieceCtx.fillStyle = '#000';
+        heldPieceCtx.fillRect(0, 0, heldPieceCanvas.width, heldPieceCanvas.height);
+        
+        if (heldPiece) {
+            const xOffset = (heldPieceCanvas.width - (heldPiece[0].length * BLOCK_SIZE)) / 2;
+            const yOffset = (heldPieceCanvas.height - (heldPiece.length * BLOCK_SIZE)) / 2;
+            
+            heldPiece.forEach((row, y) => {
+                row.forEach((value, x) => {
+                    if (value !== 0) {
+                        heldPieceCtx.fillStyle = COLORS[value];
+                        heldPieceCtx.fillRect(
+                            x * BLOCK_SIZE + xOffset,
+                            y * BLOCK_SIZE + yOffset,
+                            BLOCK_SIZE,
+                            BLOCK_SIZE
+                        );
+                        heldPieceCtx.strokeStyle = '#fff';
+                        heldPieceCtx.strokeRect(
+                            x * BLOCK_SIZE + xOffset,
+                            y * BLOCK_SIZE + yOffset,
+                            BLOCK_SIZE,
+                            BLOCK_SIZE
+                        );
+                        
+                        heldPieceCtx.beginPath();
+                        heldPieceCtx.strokeStyle = '#FFFFFF';
+                        heldPieceCtx.lineWidth = 2;
+                        
+                        heldPieceCtx.moveTo(x * BLOCK_SIZE + xOffset + BLOCK_SIZE / 2, y * BLOCK_SIZE + yOffset);
+                        heldPieceCtx.lineTo(x * BLOCK_SIZE + xOffset + BLOCK_SIZE / 2, y * BLOCK_SIZE + yOffset + BLOCK_SIZE);
+                        heldPieceCtx.moveTo(x * BLOCK_SIZE + xOffset + BLOCK_SIZE / 4, y * BLOCK_SIZE + yOffset + BLOCK_SIZE / 3);
+                        heldPieceCtx.lineTo(x * BLOCK_SIZE + xOffset + 3 * BLOCK_SIZE / 4, y * BLOCK_SIZE + yOffset + BLOCK_SIZE / 3);
+                        heldPieceCtx.moveTo(x * BLOCK_SIZE + xOffset + BLOCK_SIZE / 4, y * BLOCK_SIZE + yOffset + 2 * BLOCK_SIZE / 3);
+                        heldPieceCtx.lineTo(x * BLOCK_SIZE + xOffset + 3 * BLOCK_SIZE / 4, y * BLOCK_SIZE + yOffset + 2 * BLOCK_SIZE / 3);
+                        
+                        heldPieceCtx.stroke();
+                        
+                        heldPieceCtx.fillStyle = '#FFD700';
+                        heldPieceCtx.beginPath();
+                        heldPieceCtx.arc(x * BLOCK_SIZE + xOffset + BLOCK_SIZE / 2, y * BLOCK_SIZE + yOffset + BLOCK_SIZE / 2, 2, 0, Math.PI * 2);
+                        heldPieceCtx.fill();
+                    }
+                });
+            });
+        }
+    }
+
+    function holdPiece() {
+        if (!canHold) return;
+        
+        if (heldPiece === null) {
+            heldPiece = player.matrix;
+            playerReset();
+        } else {
+            const temp = player.matrix;
+            player.matrix = heldPiece;
+            heldPiece = temp;
+            player.pos.y = 0;
+            player.pos.x = Math.floor(BOARD_WIDTH / 2) - Math.floor(player.matrix[0].length / 2);
+        }
+        
+        canHold = false;
+        drawHeldPiece();
+    }
+
+    document.addEventListener('keydown', event => {
+        if (!gameOver) {
+            switch(event.keyCode) {
+                case 37: // Left
+                    playerMove(-1);
+                    break;
+                case 39: // Right
+                    playerMove(1);
+                    break;
+                case 40: // Down
+                    playerDrop();
+                    break;
+                case 38: // Up
+                    playerRotate();
+                    break;
+                case 32: // Space
+                    playerHardDrop();
+                    break;
+                case 67: // C key for hold
+                    holdPiece();
+                    break;
+                case 80: // P key for pause
+                    togglePause();
+                    break;
+            }
+        }
+    });
+
+    // Add this after the existing scripts
+    const video = document.getElementById('webcam');
+
+    // Request webcam access
+    async function setupWebcam() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: {
+                    width: 160,
+                    height: 160
+                }
+            });
+            video.srcObject = stream;
+        } catch (err) {
+            console.error("Error accessing webcam:", err);
+        }
+    }
+
+    setupWebcam();
+
+    function togglePause() {
+        isPaused = !isPaused;
+        pauseButton.textContent = isPaused ? 'RESUME' : 'PAUSE';
+        pausedOverlay.style.display = isPaused ? 'flex' : 'none';
+    }
+
+    const pauseButton = document.getElementById('pause-button');
+    const pausedOverlay = document.getElementById('paused-overlay');
+
+    playerReset();
+    update();
+    </script>
+</body></html>
